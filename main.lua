@@ -24,8 +24,7 @@ local MODEL_BALL = models.ball.ball
 
 -- Advanced (best left untouched)
 local CHECK_MARGIN = 0.5
-local VRADIUS = vec(RADIUS,RADIUS,RADIUS) + CHECK_MARGIN
-
+local LOW_DETAIL_MODE = false
 local MOVE_PLAYER = true -- Requires host:setPos()
 -->==============================<--
 
@@ -49,7 +48,7 @@ end
 events.ENTITY_INIT:register(function ()
    pos = player:getPos():add(0,RADIUS)
    
-   MODEL_BASE:setParentType("WORLD"):setScale(RADIUS,RADIUS,RADIUS)
+   MODEL_BASE:setParentType("WORLD")
    vanilla_model.ALL:setVisible(false)
    local pscale = 0.9 * RADIUS
    MODEL_PLAYER
@@ -60,7 +59,7 @@ events.ENTITY_INIT:register(function ()
       MODEL_PLAYER.base:setVisible(false)
    end
    MODEL_BALL
-   :setScale(RADIUS,RADIUS,RADIUS)
+   :setPrimaryRenderType("LINES")
 end)
 
 local isHost = host:isHost()
@@ -68,6 +67,57 @@ local control = vec(0,0,0,0)
 
 local lcamDir = vec(0,0,0)
 local camDir = vec(0,0,-0.01)
+
+local blockChecks = {}
+local collisionCache = {}
+local function setRadius(radius)
+   local lastRadius = RADIUS
+   RADIUS = radius
+   LOW_DETAIL_MODE = RADIUS > 5
+   blockChecks = {}
+   if LOW_DETAIL_MODE then
+      local ray_count = 64
+      for i = 1, ray_count, 1 do
+         local t = i / ray_count
+         local inclination = math.acos(1 - 2 * t)
+         local azimuth = 2 * math.pi * 0.618033 * i
+         local dir = vectors.vec3(
+            math.sin(inclination) * math.sin(azimuth),
+            math.cos(inclination),
+            math.sin(inclination) * math.cos(azimuth)
+         )
+         blockChecks[i] = dir * RADIUS
+      end
+   else
+      local r = math.max(RADIUS+CHECK_MARGIN,2)
+      local ra = r^2
+      for z = -r, r, 1 do
+         for y = -r, r, 1 do
+            for x = -r, r, 1 do
+               local fpos = vec(x+0.5,y+0.5,z+0.5)
+               local len = fpos:lengthSquared()
+               if len < ra then
+                  blockChecks[#blockChecks+1] = fpos
+               end
+            end
+         end
+      end
+   end
+   
+   MODEL_BALL
+   :setScale(RADIUS,RADIUS,RADIUS)
+   local pscale = 0.9 * RADIUS
+   MODEL_PLAYER
+   :setPrimaryTexture("SKIN")
+   :setScale(pscale,pscale,pscale)
+   CAM_DISTANCE = (CAM_DISTANCE / lastRadius) * radius
+   CAM_TOLERANCE = (CAM_TOLERANCE / lastRadius) * radius
+end
+
+setRadius(RADIUS)
+
+
+
 
 local function sync()
    pings.control(control.x,control.y,control.z,camDir.x,camDir.y,camDir.z)
@@ -84,7 +134,7 @@ local function snap(a,step)
    return math.floor(a * step + 0.5) / step
 end
 
-function pings.state(px,py,pz, r1x,r1y,r1z,r2x,r2y,r2z, vx,vy,vz, rx,ry,rz)
+function pings.state(px,py,pz, r1x,r1y,r1z,r2x,r2y,r2z, vx,vy,vz, rx,ry,rz, radius)
    if not isHost then
       pos = vec(px,py,pz)
       vel = vec(vx,vy,vz)
@@ -92,6 +142,9 @@ function pings.state(px,py,pz, r1x,r1y,r1z,r2x,r2y,r2z, vx,vy,vz, rx,ry,rz)
       local r2 = vec(r2x,r2y,r2z):normalize()
       rot = matrices.mat3(r1,r2,r1:copy():cross(r2))
       rvel = vec(rx,ry,rz)
+      if radius ~= RADIUS then
+         setRadius(radius)
+      end
    end
 end
 
@@ -142,14 +195,12 @@ events.WORLD_TICK:register(function()
             snap(vel.z,100),
             snap(rvel.x,100),
             snap(rvel.y,100),
-            snap(rvel.z,100)
+            snap(rvel.z,100),
+            RADIUS
          )
       end
    end
    lpos = pos
-   
-   -- Getting the closest point
-   local blocks = world.getBlocks(pos-VRADIUS, pos+VRADIUS)
    
    -- Camera
    if isHost then
@@ -161,23 +212,36 @@ events.WORLD_TICK:register(function()
    camDir:normalize()
    
    local intersectionPoints = {}
-   for _, block in pairs(blocks) do
-      local AABB = block:getCollisionShape()
-      local offset = block:getPos()
-      for key, box in pairs(AABB) do
-         local a = box[1] + offset
-         local b = box[2] + offset
-         local clampedPos = vec(
-            math.clamp(pos.x, a.x,b.x),
-            math.clamp(pos.y, a.y,b.y),
-            math.clamp(pos.z, a.z,b.z)
-         )
-         local dist = (clampedPos-pos):length()
-         if RADIUS >= dist then
-            intersectionPoints[#intersectionPoints+1] = clampedPos
+   local samples = 0
+   for i = 1, #blockChecks, 1 do
+      local fpos = blockChecks[i]
+      local block = world.getBlockState(fpos+pos)
+      if block:hasCollision() then
+         samples = samples + 1
+         local AABB
+         if LOW_DETAIL_MODE then
+            AABB = {{vec(0,0,0),vec(1,1,1)}}
+         else
+            AABB = block:getCollisionShape()
+         end
+         collisionCache[fpos] = block
+         local offset = block:getPos()
+         for key, box in pairs(AABB) do
+            local a = box[1] + offset
+            local b = box[2] + offset
+            local clampedPos = vec(
+               math.clamp(pos.x, a.x,b.x),
+               math.clamp(pos.y, a.y,b.y),
+               math.clamp(pos.z, a.z,b.z)
+            )
+            local dist = (clampedPos-pos):length()
+            if RADIUS >= dist then
+               intersectionPoints[#intersectionPoints+1] = clampedPos
+            end
          end
       end
    end
+   host:setActionbar("samples: "..samples)
    table.sort(intersectionPoints,function (a, b) return (a-pos):length() > (b-pos):length()end)
    local factor = 1/#intersectionPoints
    for i = 1, math.min(#intersectionPoints,MAX_COLLISIONS), 1 do
@@ -221,8 +285,10 @@ events.WORLD_TICK:register(function()
    
    if isHost then
       if MOVE_PLAYER then
+         local fpos = pos - vec(0,player:getBoundingBox().y*0.5,0)
 ---@diagnostic disable-next-line: undefined-field
-         host:setPos(pos - vec(0,player:getBoundingBox().y*0.5,0))
+         host:setPos(fpos)
+         host:sendChatCommand("/tp " .. snap(fpos.x,1000) .. " " .. snap(fpos.y,1000) .. " " .. snap(fpos.z,1000))
       end
    end
 end)
@@ -242,3 +308,25 @@ events.WORLD_RENDER:register(function (deltaTick)
    :setCameraRot(math.deg(math.asin(tcamDir.y)),math.deg(math.atan2(tcamDir.x,-tcamDir.z)))
    MODEL_BASE:setMatrix(transformation)
 end)
+
+if isHost then
+   local function warn(msg)
+      printJson('{"text":"'..msg..'","color":"yellow"}')
+   end
+   events.WORLD_RENDER:register(function (delta)
+      if host:isChatOpen() and host:getChatText():find("^$resize") then
+         host:setChatColor(1,1,0)
+      else host:setChatColor(1,1,1)
+      end
+   end)
+   
+   events.CHAT_SEND_MESSAGE:register(function (message)
+      if message:find("^$resize") then
+         local num = tonumber(message:match("^$resize ([0-9.-]+)$"))
+         if num then setRadius(num)
+         else print("Invalid number given")
+         end host:appendChatHistory(message) return ""
+      end
+      return message
+   end)
+end
