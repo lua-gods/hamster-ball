@@ -112,6 +112,9 @@ local function setRadius(radius)
    :setScale(pscale,pscale,pscale)
    CAM_DISTANCE = (CAM_DISTANCE / lastRadius) * radius
    CAM_TOLERANCE = (CAM_TOLERANCE / lastRadius) * radius
+   GRAVITY = (GRAVITY / math.min(lastRadius,1)) * math.min(radius,1)
+   CONTROL_SPEED = (CONTROL_SPEED / lastRadius) * radius
+   print(GRAVITY)
 end
 
 setRadius(RADIUS)
