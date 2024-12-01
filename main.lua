@@ -3,7 +3,7 @@
 
 -->==========[ CONFIG ]==========<--
 -- Properties
-local RADIUS = 3
+local RADIUS = 1
 
 -- Camera
 local CAM_MAX_DIP = 0.75 -- maximum camera pitch in percentage
