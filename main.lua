@@ -25,7 +25,7 @@ local MODEL_BALL = models.ball.ball
 -- Advanced (best left untouched)
 local CHECK_MARGIN = 0.5
 local LOW_DETAIL_MODE = false
-local MOVE_PLAYER = true -- Requires host:setPos()
+local MOVE_PLAYER = false -- Requires host:setPos()
 -->==============================<--
 
 local lpos = vec(0,0,0)
@@ -288,7 +288,7 @@ events.WORLD_TICK:register(function()
          local fpos = pos - vec(0,player:getBoundingBox().y*0.5,0)
 ---@diagnostic disable-next-line: undefined-field
          host:setPos(fpos)
-         host:sendChatCommand("/tp " .. snap(fpos.x,1000) .. " " .. snap(fpos.y,1000) .. " " .. snap(fpos.z,1000))
+         --host:sendChatCommand("/tp " .. snap(fpos.x,1000) .. " " .. snap(fpos.y,1000) .. " " .. snap(fpos.z,1000))
       end
    end
 end)
