@@ -59,7 +59,7 @@ events.ENTITY_INIT:register(function ()
       MODEL_PLAYER.base:setVisible(false)
    end
    MODEL_BALL
-   :setPrimaryRenderType("LINES")
+   :setPrimaryTexture("RESOURCE","minecraft:textures/block/glow_lichen.png")
 end)
 
 local isHost = host:isHost()
