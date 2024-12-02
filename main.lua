@@ -14,7 +14,7 @@ local CAM_DISTANCE = 2 * RADIUS
 local GRAVITY = vec(0,-0.03,0)
 local FRICTION = 0.2
 local COLLISION_MARGIN = 0.0001
-local CONTROL_SPEED = 2
+local CONTROL_SPEED = 1
 local MAX_COLLISIONS = 100
 
 -- Model
