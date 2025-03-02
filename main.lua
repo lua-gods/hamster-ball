@@ -7,8 +7,8 @@ local RADIUS = 1
 
 -- Camera
 local CAM_MAX_DIP = 0.75 -- maximum camera pitch in percentage
-local CAM_TOLERANCE = 2 * RADIUS
-local CAM_DISTANCE = 2 * RADIUS
+local CAM_TOLERANCE = 3 * RADIUS
+local CAM_DISTANCE = 5 * RADIUS
 
 -- Physics
 local GRAVITY = vec(0,-0.03,0)
@@ -295,7 +295,9 @@ events.WORLD_TICK:register(function()
    end
 end)
 
-events.WORLD_RENDER:register(function (deltaTick)
+renderer:setRenderCrosshair(false)
+
+events.POST_WORLD_RENDER:register(function (deltaTick)
    local trot = rot:copy()
    local omega = (rot * rot:transposed()) * (rvel:length() ~= 0 and rvel or vec(0,0.000001,0))
    local speed = math.deg(omega:length()) * 0.05 * deltaTick / RADIUS
